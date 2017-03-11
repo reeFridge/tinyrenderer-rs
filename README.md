@@ -1,5 +1,5 @@
 # tinyrenderer-rs
-Try to write very simple software-renderer on Rust lang, based on (https://github.com/ssloy/tinyrenderer/)[tinyrenderer] course.
+Try to write very simple software-renderer on Rust lang, based on [tinyrenderer](https://github.com/ssloy/tinyrenderer/) course.
 
 ## Progress
 - [x] Lesson#01 Wireframe
