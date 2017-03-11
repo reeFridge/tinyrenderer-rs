@@ -5,6 +5,7 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::Point;
 use sdl2::render::Renderer;
+use std::cmp::Ordering;
 
 trait TinyRenderer {
     fn pixel(&mut self, Point, Color);
@@ -24,20 +25,47 @@ impl<'a> TinyRenderer for Renderer<'a> {
         let current_color = self.draw_color();
         self.set_draw_color(c);
 
-        let dx = (end.x() - start.x()).abs();
-        let dy = (end.y() - start.y()).abs();
+        let mut x0 = start.x();
+        let mut y0 = start.y();
+        let mut x1 = end.x();
+        let mut y1 = end.y();
 
-        let mut err = 0;
-        let derr = dy;
-        let mut y = start.y();
+        let steep = (y1 - y0).abs() > (x1 - x0).abs();
 
-        for x in start.x() .. end.x() {
-            self.draw_point(Point::new(x, y)).unwrap();
-            err += derr;
+        if steep {
+            std::mem::swap(&mut x0, &mut y0);
+            std::mem::swap(&mut x1, &mut y1);
+        }
 
-            if 2 * err >= dx {
-                y += 1;
-                err -= dx;
+        let reverse = x0 > x1;
+
+        if reverse {
+            std::mem::swap(&mut x0, &mut x1);
+            std::mem::swap(&mut y0, &mut y1);
+        }
+
+        let dx = x1 - x0;
+        let dy = (y1 - y0).abs();
+
+        let mut err = dx / 2;
+        let mut y = y0;
+        let ystep = match y0.cmp(&y1) {
+            Ordering::Less => 1,
+            _ => -1
+        };
+
+        for x in x0..x1 {
+            if steep {
+                self.draw_point(Point::new(y, x)).unwrap();
+            } else {
+                self.draw_point(Point::new(x, y)).unwrap();
+            }
+
+            err -= dy;
+
+            if err < 0 {
+                y += ystep;
+                err += dx;
             }
         }
 
@@ -63,6 +91,8 @@ fn main() {
     //Draw pixel
     renderer.pixel(Point::new(200, 200), Color::RGB(0, 255, 0));
     renderer.line(Point::new(250, 250), Point::new(385, 460), Color::RGB(0, 0, 255));
+    renderer.line(Point::new(250, 250), Point::new(91, 0), Color::RGB(0, 255, 255));
+    renderer.line(Point::new(250, 250), Point::new(385, 0), Color::RGB(255, 0, 255));
 
     renderer.present();
 
