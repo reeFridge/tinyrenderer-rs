@@ -1,11 +1,15 @@
 extern crate sdl2;
+extern crate assimp;
 
+use assimp::Importer;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::rect::Point;
 use sdl2::render::Renderer;
 use std::cmp::Ordering;
+
+use assimp::Vector3D;
 
 trait TinyRenderer {
     fn pixel(&mut self, Point, Color);
@@ -74,10 +78,14 @@ impl<'a> TinyRenderer for Renderer<'a> {
 }
 
 fn main() {
+    let (width, height) = (800, 600);
+    let importer = Importer::new();
+    let scene = importer.read_file("resources/model.obj").unwrap();
+
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("tinyrenderer-rs", 800, 600)
+    let window = video_subsystem.window("tinyrenderer-rs", width, height)
         .position_centered()
         .opengl()
         .build()
@@ -88,11 +96,28 @@ fn main() {
     renderer.set_draw_color(Color::RGB(0, 0, 0));
     renderer.clear();
 
-    //Draw pixel
-    renderer.pixel(Point::new(200, 200), Color::RGB(0, 255, 0));
-    renderer.line(Point::new(250, 250), Point::new(385, 460), Color::RGB(0, 0, 255));
-    renderer.line(Point::new(250, 250), Point::new(91, 0), Color::RGB(0, 255, 255));
-    renderer.line(Point::new(250, 250), Point::new(385, 0), Color::RGB(255, 0, 255));
+    for mesh in scene.mesh_iter() {
+        for face in mesh.face_iter() {
+            for j in 0..3 {
+                let v0 = match mesh.get_vertex(face[j]) {
+                    Some(x) => x,
+                    None => Vector3D::new(0., 0., 0.)
+                };
+
+                let v1 = match mesh.get_vertex(face[(j + 1) % 3]) {
+                    Some(x) => x,
+                    None => Vector3D::new(0., 0., 0.)
+                };
+
+                let x0 = width as i32 - ((v0.x + 1.) * width as f32 / 2.) as i32;
+                let y0 = height as i32 - ((v0.y + 1.) * height as f32 / 2.) as i32;
+                let x1 = width as i32 - ((v1.x + 1.) * width as f32 / 2.) as i32;
+                let y1 = height as i32 - ((v1.y + 1.) * height as f32 / 2.) as i32;
+
+                renderer.line(Point::new(x0, y0), Point::new(x1, y1), Color::RGB(255, 255, 255));
+            }
+        }
+    }
 
     renderer.present();
 
