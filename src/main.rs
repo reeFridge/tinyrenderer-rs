@@ -7,15 +7,40 @@ use sdl2::rect::Point;
 use sdl2::render::Renderer;
 
 trait TinyRenderer {
-    fn set_pixel(&mut self, i32, i32, Color);
+    fn pixel(&mut self, Point, Color);
+    fn line(&mut self, Point, Point, Color);
 }
 
 impl<'a> TinyRenderer for Renderer<'a> {
-    fn set_pixel(&mut self, x: i32, y: i32, c: Color) {
+    fn pixel(&mut self, p: Point, c: Color) {
         let current_color = self.draw_color();
 
         self.set_draw_color(c);
-        self.draw_point(Point::new(x, y)).unwrap();
+        self.draw_point(p).unwrap();
+        self.set_draw_color(current_color);
+    }
+
+    fn line(&mut self, start: Point, end: Point, c: Color) {
+        let current_color = self.draw_color();
+        self.set_draw_color(c);
+
+        let dx = (end.x() - start.x()).abs();
+        let dy = (end.y() - start.y()).abs();
+
+        let mut err = 0;
+        let derr = dy;
+        let mut y = start.y();
+
+        for x in start.x() .. end.x() {
+            self.draw_point(Point::new(x, y)).unwrap();
+            err += derr;
+
+            if 2 * err >= dx {
+                y += 1;
+                err -= dx;
+            }
+        }
+
         self.set_draw_color(current_color);
     }
 }
@@ -36,7 +61,8 @@ fn main() {
     renderer.clear();
 
     //Draw pixel
-    renderer.set_pixel(200, 200, Color::RGB(0, 255, 0));
+    renderer.pixel(Point::new(200, 200), Color::RGB(0, 255, 0));
+    renderer.line(Point::new(250, 250), Point::new(385, 460), Color::RGB(0, 0, 255));
 
     renderer.present();
 
