@@ -78,7 +78,7 @@ impl<'a> TinyRenderer for Renderer<'a> {
 }
 
 fn main() {
-    let (width, height) = (800, 600);
+    let (width, height) = (600, 600);
     let importer = Importer::new();
     let scene = importer.read_file("resources/model.obj").unwrap();
 
