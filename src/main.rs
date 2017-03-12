@@ -11,9 +11,70 @@ use std::cmp::Ordering;
 
 use assimp::Vector3D;
 
+fn sort_points_by_y(points: &mut Vec<Point>) {
+    for _ in 0..(points.len() - 1) {
+        for j in 0..(points.len() - 1) {
+            if points[j].y() < points[j + 1].y() {
+                points.swap(j, j + 1);
+            }
+        }
+    }
+}
+
+fn get_line_points(start: Point, end: Point) -> Vec<Point> {
+    let mut x0 = start.x();
+    let mut y0 = start.y();
+    let mut x1 = end.x();
+    let mut y1 = end.y();
+
+    let steep = (y1 - y0).abs() > (x1 - x0).abs();
+
+    if steep {
+        std::mem::swap(&mut x0, &mut y0);
+        std::mem::swap(&mut x1, &mut y1);
+    }
+
+    let reverse = x0 > x1;
+
+    if reverse {
+        std::mem::swap(&mut x0, &mut x1);
+        std::mem::swap(&mut y0, &mut y1);
+    }
+
+    let dx = x1 - x0;
+    let dy = (y1 - y0).abs();
+
+    let mut err = dx / 2;
+    let mut y = y0;
+    let ystep = match y0.cmp(&y1) {
+        Ordering::Less => 1,
+        _ => -1
+    };
+
+    let mut points: Vec<Point> = vec![];
+
+    for x in x0..x1 {
+        if steep {
+            points.push(Point::new(y, x));
+        } else {
+            points.push(Point::new(x, y));
+        }
+
+        err -= dy;
+
+        if err < 0 {
+            y += ystep;
+            err += dx;
+        }
+    }
+
+    points
+}
+
 trait TinyRenderer {
     fn pixel(&mut self, Point, Color);
     fn line(&mut self, Point, Point, Color);
+    fn triangle(&mut self, Point, Point, Point, Color);
 }
 
 impl<'a> TinyRenderer for Renderer<'a> {
@@ -75,6 +136,17 @@ impl<'a> TinyRenderer for Renderer<'a> {
 
         self.set_draw_color(current_color);
     }
+
+    fn triangle(&mut self, p0: Point, p1: Point, p2: Point, c: Color) {
+        let mut points = vec![p0, p1, p2];
+        sort_points_by_y(&mut points);
+
+        let horizon = get_line_points(points[1], points[2]);
+
+        for l in 0..horizon.len() {
+            self.line(points[0], horizon[l], c);
+        }
+    }
 }
 
 fn main() {
@@ -118,6 +190,8 @@ fn main() {
             }
         }
     }
+
+    renderer.triangle(Point::new(20, 50), Point::new(100, 200), Point::new(40, 300), Color::RGB(0, 255, 0));
 
     renderer.present();
 
