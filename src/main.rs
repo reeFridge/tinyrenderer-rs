@@ -90,48 +90,10 @@ impl<'a> TinyRenderer for Renderer<'a> {
         let current_color = self.draw_color();
         self.set_draw_color(c);
 
-        let mut x0 = start.x();
-        let mut y0 = start.y();
-        let mut x1 = end.x();
-        let mut y1 = end.y();
+        let points = get_line_points(start, end);
 
-        let steep = (y1 - y0).abs() > (x1 - x0).abs();
-
-        if steep {
-            std::mem::swap(&mut x0, &mut y0);
-            std::mem::swap(&mut x1, &mut y1);
-        }
-
-        let reverse = x0 > x1;
-
-        if reverse {
-            std::mem::swap(&mut x0, &mut x1);
-            std::mem::swap(&mut y0, &mut y1);
-        }
-
-        let dx = x1 - x0;
-        let dy = (y1 - y0).abs();
-
-        let mut err = dx / 2;
-        let mut y = y0;
-        let ystep = match y0.cmp(&y1) {
-            Ordering::Less => 1,
-            _ => -1
-        };
-
-        for x in x0..x1 {
-            if steep {
-                self.draw_point(Point::new(y, x)).unwrap();
-            } else {
-                self.draw_point(Point::new(x, y)).unwrap();
-            }
-
-            err -= dy;
-
-            if err < 0 {
-                y += ystep;
-                err += dx;
-            }
+        for p in 0..points.len() {
+            self.draw_point(points[p]).unwrap();
         }
 
         self.set_draw_color(current_color);
