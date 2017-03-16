@@ -14,11 +14,21 @@ use assimp::Vector3D;
 fn sort_points_by_y(points: &mut Vec<Point>) {
     for _ in 0..(points.len() - 1) {
         for j in 0..(points.len() - 1) {
-            if points[j].y() < points[j + 1].y() {
+            if points[j].y() > points[j + 1].y() {
                 points.swap(j, j + 1);
             }
         }
     }
+}
+
+fn clamp<N>(a: N, min: N, max: N) -> N where N: PartialOrd {
+    if a < min { return min }
+    if a > max { return max }
+    a
+}
+
+fn interpolate(min: f32, max: f32, gradient: f32) -> f32 {
+    min + (max - min) * clamp(gradient, 0., 1.)
 }
 
 fn get_line_points(start: Point, end: Point) -> Vec<Point> {
@@ -74,6 +84,7 @@ fn get_line_points(start: Point, end: Point) -> Vec<Point> {
 trait TinyRenderer {
     fn pixel(&mut self, Point, Color);
     fn line(&mut self, Point, Point, Color);
+    fn process_scan_ine(&mut self, i32, Point, Point, Point, Point, Color);
     fn triangle(&mut self, Point, Point, Point, Color);
 }
 
@@ -99,14 +110,58 @@ impl<'a> TinyRenderer for Renderer<'a> {
         self.set_draw_color(current_color);
     }
 
+    fn process_scan_ine(&mut self, y: i32, pa: Point, pb: Point, pc: Point, pd: Point, c: Color) {
+        let current_color = self.draw_color();
+        self.set_draw_color(c);
+
+        let grad1 = match (&pa.y()).cmp(&pb.y()) {
+            Ordering::Equal => 1.,
+            _ => (y - pa.y()) as f32 / (pb.y()- pa.y()) as f32
+        };
+
+        let grad2 = match (&pc.y()).cmp(&pd.y()) {
+            Ordering::Equal => 1.,
+            _ => (y - pc.y()) as f32 / (pd.y() - pc.y()) as f32
+        };
+
+        let sx = interpolate(pa.x() as f32, pb.x() as f32, grad1) as i32;
+        let ex = interpolate(pc.x() as f32, pd.x() as f32, grad2) as i32;
+
+        for x in sx..ex {
+            self.draw_point(Point::new(x, y)).unwrap();
+        }
+
+        self.set_draw_color(current_color);
+    }
+
     fn triangle(&mut self, p0: Point, p1: Point, p2: Point, c: Color) {
         let mut points = vec![p0, p1, p2];
         sort_points_by_y(&mut points);
 
-        let horizon = get_line_points(points[1], points[2]);
+        let dp0p1 = match (points[1].y() - points[0].y()).cmp(&0) {
+            Ordering::Greater => (points[1].x() - points[0].x()) as f32 / (points[1].y() - points[0].y()) as f32,
+            _ => 0.
+        };
 
-        for l in 0..horizon.len() {
-            self.line(points[0], horizon[l], c);
+        let dp0p2 = match (points[2].y() - points[0].y()).cmp(&0) {
+            Ordering::Greater => (points[2].x() - points[0].x()) as f32 / (points[2].y() - points[0].y()) as f32,
+            _ => 0.
+        };
+
+        for y in points[0].y()..points[2].y() {
+            if y < points[1].y() {
+                if dp0p1 > dp0p2 {
+                    self.process_scan_ine(y, points[0], points[2], points[0], points[1], c);
+                } else {
+                    self.process_scan_ine(y, points[0], points[1], points[0], points[2], c);
+                }
+            } else {
+                if dp0p1 > dp0p2 {
+                    self.process_scan_ine(y, points[0], points[2], points[1], points[2], c);
+                } else {
+                    self.process_scan_ine(y, points[1], points[2], points[0], points[2], c);
+                }
+            }
         }
     }
 }
@@ -153,7 +208,7 @@ fn main() {
         }
     }
 
-    renderer.triangle(Point::new(20, 50), Point::new(100, 200), Point::new(40, 300), Color::RGB(0, 255, 0));
+    renderer.triangle(Point::new(10, 10), Point::new(100, 30), Point::new(190, 160), Color::RGB(0, 255, 0));
 
     renderer.present();
 
