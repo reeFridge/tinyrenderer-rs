@@ -6,4 +6,8 @@ authors = ["reeFridge <reefridgerator@gmail.com>"]
 [dependencies]
 image = "*"
 sdl2 = "*"
-assimp = "*"
+cgmath = "*"
+
+[dependencies.assimp]
+version = "*"
+features = ["cgmath"]
