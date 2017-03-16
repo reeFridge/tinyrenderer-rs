@@ -1,5 +1,6 @@
 extern crate sdl2;
 extern crate assimp;
+extern crate cgmath;
 
 use assimp::Importer;
 use sdl2::pixels::Color;
@@ -8,6 +9,9 @@ use sdl2::keyboard::Keycode;
 use sdl2::rect::Point;
 use sdl2::render::Renderer;
 use std::cmp::Ordering;
+use cgmath::InnerSpace;
+use cgmath::Vector3;
+use cgmath::Zero;
 
 use assimp::Vector3D;
 
@@ -167,7 +171,7 @@ impl<'a> TinyRenderer for Renderer<'a> {
 }
 
 fn main() {
-    let (width, height) = (600, 600);
+    let (width, height) = (700, 700);
     let importer = Importer::new();
     let scene = importer.read_file("resources/model.obj").unwrap();
 
@@ -185,30 +189,42 @@ fn main() {
     renderer.set_draw_color(Color::RGB(0, 0, 0));
     renderer.clear();
 
+    let light_dir = Vector3::new(0., 0., -1.);
+
     for mesh in scene.mesh_iter() {
         for face in mesh.face_iter() {
+            let mut screen_coords: [Point; 3] = [Point::new(0, 0); 3];
+            let mut world_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
+
             for j in 0..3 {
-                let v0 = match mesh.get_vertex(face[j]) {
+                let v = match mesh.get_vertex(face[j]) {
                     Some(x) => x,
                     None => Vector3D::new(0., 0., 0.)
                 };
 
-                let v1 = match mesh.get_vertex(face[(j + 1) % 3]) {
-                    Some(x) => x,
-                    None => Vector3D::new(0., 0., 0.)
-                };
+                let (p1, p2) = ((v.x + 1.) * width as f32 / 2., (v.y + 1.) * height as f32 / 2.);
+                screen_coords[j as usize] = Point::new(p1 as i32, (height as f32 - p2) as i32);
 
-                let x0 = width as i32 - ((v0.x + 1.) * width as f32 / 2.) as i32;
-                let y0 = height as i32 - ((v0.y + 1.) * height as f32 / 2.) as i32;
-                let x1 = width as i32 - ((v1.x + 1.) * width as f32 / 2.) as i32;
-                let y1 = height as i32 - ((v1.y + 1.) * height as f32 / 2.) as i32;
+                world_coords[j as usize] = v.into();
+            }
 
-                renderer.line(Point::new(x0, y0), Point::new(x1, y1), Color::RGB(255, 255, 255));
+            let n = (world_coords[2] - world_coords[0]).cross(world_coords[1] - world_coords[0]).normalize();
+            let intensity = n.dot(light_dir);
+
+            if intensity > 0.0 {
+                renderer.triangle(
+                    screen_coords[0],
+                    screen_coords[1],
+                    screen_coords[2],
+                    Color::RGB(
+                        (intensity * 255.) as u8,
+                        (intensity * 255.) as u8,
+                        (intensity * 255.) as u8
+                    )
+                );
             }
         }
     }
-
-    renderer.triangle(Point::new(10, 10), Point::new(100, 30), Point::new(190, 160), Color::RGB(0, 255, 0));
 
     renderer.present();
 
