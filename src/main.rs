@@ -88,7 +88,7 @@ fn get_line_points(start: Point, end: Point) -> Vec<Point> {
 trait TinyRenderer {
     fn pixel(&mut self, Point, Color);
     fn line(&mut self, Point, Point, Color);
-    fn process_scan_ine(&mut self, i32, Point, Point, Point, Point, Color);
+    fn process_scan_line(&mut self, i32, Point, Point, Point, Point, Color);
     fn triangle(&mut self, Point, Point, Point, Color);
 }
 
@@ -114,7 +114,7 @@ impl<'a> TinyRenderer for Renderer<'a> {
         self.set_draw_color(current_color);
     }
 
-    fn process_scan_ine(&mut self, y: i32, pa: Point, pb: Point, pc: Point, pd: Point, c: Color) {
+    fn process_scan_line(&mut self, y: i32, pa: Point, pb: Point, pc: Point, pd: Point, c: Color) {
         let current_color = self.draw_color();
         self.set_draw_color(c);
 
@@ -128,8 +128,12 @@ impl<'a> TinyRenderer for Renderer<'a> {
             _ => (y - pc.y()) as f32 / (pd.y() - pc.y()) as f32
         };
 
-        let sx = interpolate(pa.x() as f32, pb.x() as f32, grad1) as i32;
-        let ex = interpolate(pc.x() as f32, pd.x() as f32, grad2) as i32;
+        let mut sx = interpolate(pa.x() as f32, pb.x() as f32, grad1) as i32;
+        let mut ex = interpolate(pc.x() as f32, pd.x() as f32, grad2) as i32;
+
+        if sx > ex {
+            std::mem::swap(&mut sx, &mut ex);
+        }
 
         for x in sx..ex {
             self.draw_point(Point::new(x, y)).unwrap();
@@ -155,15 +159,15 @@ impl<'a> TinyRenderer for Renderer<'a> {
         for y in points[0].y()..points[2].y() {
             if y < points[1].y() {
                 if dp0p1 > dp0p2 {
-                    self.process_scan_ine(y, points[0], points[2], points[0], points[1], c);
+                    self.process_scan_line(y, points[0], points[2], points[0], points[1], c);
                 } else {
-                    self.process_scan_ine(y, points[0], points[1], points[0], points[2], c);
+                    self.process_scan_line(y, points[0], points[1], points[0], points[2], c);
                 }
             } else {
                 if dp0p1 > dp0p2 {
-                    self.process_scan_ine(y, points[0], points[2], points[1], points[2], c);
+                    self.process_scan_line(y, points[0], points[2], points[1], points[2], c);
                 } else {
-                    self.process_scan_ine(y, points[1], points[2], points[0], points[2], c);
+                    self.process_scan_line(y, points[1], points[2], points[0], points[2], c);
                 }
             }
         }
