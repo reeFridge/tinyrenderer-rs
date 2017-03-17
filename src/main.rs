@@ -128,8 +128,12 @@ impl<'a> TinyRenderer for Renderer<'a> {
             _ => (y - pc.y()) as f32 / (pd.y() - pc.y()) as f32
         };
 
-        let sx = interpolate(pa.x() as f32, pb.x() as f32, grad1) as i32;
-        let ex = interpolate(pc.x() as f32, pd.x() as f32, grad2) as i32;
+        let mut sx = interpolate(pa.x() as f32, pb.x() as f32, grad1) as i32;
+        let mut ex = interpolate(pc.x() as f32, pd.x() as f32, grad2) as i32;
+
+        if sx > ex {
+            std::mem::swap(&mut sx, &mut ex);
+        }
 
         for x in sx..ex {
             self.draw_point(Point::new(x, y)).unwrap();
