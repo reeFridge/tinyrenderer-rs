@@ -215,7 +215,7 @@ fn main() {
             let n = (world_coords[2] - world_coords[0]).cross(world_coords[1] - world_coords[0]).normalize();
             let intensity = n.dot(light_dir);
 
-            if intensity > 0.0 {
+            if intensity > 0.0 { // back-face culling
                 renderer.triangle(
                     screen_coords[0],
                     screen_coords[1],
