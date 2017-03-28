@@ -98,7 +98,7 @@ trait TinyRenderer {
 }
 
 impl<'a> TinyRenderer for Renderer<'a> {
-    fn pixel(&mut self, x: i32, y: i32, z: f32, c: Color) {
+    fn pixel(&mut self, x: i32, y: i32, z: f32, c: Color, ) {
         let index = (x + y * WIDTH as i32) as usize;
 
         if unsafe { Z_BUFFER[index] < z } {
