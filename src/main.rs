@@ -11,13 +11,14 @@ use sdl2::render::Renderer;
 use std::cmp::Ordering;
 use cgmath::InnerSpace;
 use cgmath::Vector3;
+use cgmath::Vector4;
 use cgmath::Zero;
-
-use assimp::Vector3D;
+use cgmath::Matrix4;
+use cgmath::SquareMatrix;
 
 static WIDTH: u32 = 700;
 static HEIGHT: u32 = 700;
-static mut Z_BUFFER: [f32; 700 * 700] = [-1.; 700 * 700];
+static mut Z_BUFFER: [f32; 800 * 800] = [-1.; 800 * 800];
 
 fn sort_points_by_y(points: &mut Vec<Vector3<f32>>) {
     for _ in 0..(points.len() - 1) {
@@ -213,7 +214,20 @@ fn main() {
     renderer.set_draw_color(Color::RGB(0, 0, 0));
     renderer.clear();
 
+    let camera = Vector3::new(0., 0., 3.);
     let light_dir = Vector3::new(0., 0., -1.);
+    let mut projection = Matrix4::<f32>::identity();
+    let mut viewport = Matrix4::<f32>::identity();
+    let (x, y, w, h) = (WIDTH as f32 / 8., HEIGHT as f32 / 8., WIDTH as f32 * 3. / 4., HEIGHT as f32 * 3. / 4.);
+    viewport[3][0] = x + w / 2.;
+    viewport[3][1] = y + h / 2.;
+    viewport[3][2] = 255. / 2.; //depth
+
+    viewport[0][0] = w / 2.;
+    viewport[1][1] = h / 2.;
+    viewport[2][2] = 255. / 2.;
+
+    projection[2][3] = -1. / camera.z;
 
     for mesh in scene.mesh_iter() {
         for face in mesh.face_iter() {
@@ -221,15 +235,19 @@ fn main() {
             let mut world_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
 
             for j in 0..3 {
-                let v = match mesh.get_vertex(face[j]) {
-                    Some(x) => x,
-                    None => Vector3D::new(0., 0., 0.)
+                let v: Vector3<f32> = match mesh.get_vertex(face[j]) {
+                    Some(x) => x.into(),
+                    None => Vector3::<f32>::new(0., 0., 0.)
                 };
 
-                let (p1, p2) = ((v.x + 1.) * WIDTH as f32 / 2., (v.y + 1.) * HEIGHT as f32 / 2.);
-                screen_coords[j as usize] = Vector3::<f32>::new(p1, (HEIGHT as f32 - p2), v.z);
+                //let (p1, p2) = ((v.x + 1.) * WIDTH as f32 / 2., (v.y + 1.) * HEIGHT as f32 / 2.);
+                // m2v(viewport * projection * v2m(v));
+                let m = viewport * projection * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
+                let result_vector = Vector3::<f32>::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
 
-                world_coords[j as usize] = v.into();
+                screen_coords[j as usize] = result_vector;
+
+                world_coords[j as usize] = v;
             }
 
             let n = (world_coords[2] - world_coords[0]).cross(world_coords[1] - world_coords[0]).normalize();
