@@ -196,6 +196,32 @@ impl<'a> TinyRenderer for Renderer<'a> {
     }
 }
 
+fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4<f32> {
+    let mut viewport = Matrix4::<f32>::identity();
+    viewport[3][0] = x + w / 2.;
+    viewport[3][1] = y + h / 2.;
+    viewport[3][2] = 255. / 2.; //depth
+
+    viewport[0][0] = w / 2.;
+    viewport[1][1] = h / 2.;
+    viewport[2][2] = 255. / 2.;
+    return viewport;
+}
+
+// Matrix lookat(Vec3f eye, Vec3f center, Vec3f up) {
+//     Vec3f z = (eye-center).normalize();
+//     Vec3f x = (up^z).normalize();
+//     Vec3f y = (z^x).normalize();
+//     Matrix res = Matrix::identity(4);
+//     for (int i=0; i<3; i++) {
+//         res[0][i] = x[i];
+//         res[1][i] = y[i];
+//         res[2][i] = z[i];
+//         res[i][3] = -center[i];
+//     }
+//     return res;
+// }
+
 fn main() {
     let importer = Importer::new();
     let scene = importer.read_file("resources/model.obj").unwrap();
@@ -215,17 +241,10 @@ fn main() {
     renderer.clear();
 
     let camera = Vector3::new(0., 0., 3.);
-    let light_dir = Vector3::new(0., 0., -1.);
+    let light_dir = Vector3::new(0., 0., -1.).normalize();
     let mut projection = Matrix4::<f32>::identity();
-    let mut viewport = Matrix4::<f32>::identity();
     let (x, y, w, h) = (WIDTH as f32 / 8., HEIGHT as f32 / 8., WIDTH as f32 * 3. / 4., HEIGHT as f32 * 3. / 4.);
-    viewport[3][0] = x + w / 2.;
-    viewport[3][1] = y + h / 2.;
-    viewport[3][2] = 255. / 2.; //depth
-
-    viewport[0][0] = w / 2.;
-    viewport[1][1] = h / 2.;
-    viewport[2][2] = 255. / 2.;
+    let viewport = viewport(x, y, w, h);
 
     projection[2][3] = -1. / camera.z;
 
@@ -241,7 +260,7 @@ fn main() {
                 };
 
                 //let (p1, p2) = ((v.x + 1.) * WIDTH as f32 / 2., (v.y + 1.) * HEIGHT as f32 / 2.);
-                // m2v(viewport * projection * v2m(v));
+                // m2v(ViewPort*Projection*ModelView*Matrix(v));
                 let m = viewport * projection * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
                 let result_vector = Vector3::<f32>::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
 
