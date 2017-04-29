@@ -208,19 +208,25 @@ fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4<f32> {
     return viewport;
 }
 
-// Matrix lookat(Vec3f eye, Vec3f center, Vec3f up) {
-//     Vec3f z = (eye-center).normalize();
-//     Vec3f x = (up^z).normalize();
-//     Vec3f y = (z^x).normalize();
-//     Matrix res = Matrix::identity(4);
-//     for (int i=0; i<3; i++) {
-//         res[0][i] = x[i];
-//         res[1][i] = y[i];
-//         res[2][i] = z[i];
-//         res[i][3] = -center[i];
-//     }
-//     return res;
-// }
+fn lookat(eye: Vector3<f32>, center: Vector3<f32>, up: Vector3<f32>) -> Matrix4<f32> {
+    let z = (eye - center).normalize();
+    let x = up.cross(z).normalize();
+    let y = z.cross(x).normalize();
+    let mut res = Matrix4::<f32>::identity();
+
+    for i in 0..3 {
+        res[i][0] = x[i];
+        res[i][1] = y[i];
+        res[i][2] = z[i];
+        res[3][i] = -center[i];
+    }
+
+    return res;
+}
+
+fn normal(v: Vector3<f32>) -> f32 {
+    (v.x * v.x + v.y * v.y + v.z * v.z).sqrt()
+}
 
 fn main() {
     let importer = Importer::new();
@@ -239,51 +245,58 @@ fn main() {
 
     renderer.set_draw_color(Color::RGB(0, 0, 0));
     renderer.clear();
+    // front: ( 0,  0,  3)
+    // back:  ( 0,  0, -3)
+    // left:  (-3,  0,  0)
+    // right: ( 3,  0,  0)
+    // top:   ( 0,  3,  0.1) ?
+    // down:  ( 0, -3,  0.1) ?
+    let eye = Vector3::new(1., 1., 3.);
+    let center = Vector3::new(0., 0., 0.);
 
-    let camera = Vector3::new(0., 0., 3.);
-    let light_dir = Vector3::new(0., 0., -1.).normalize();
+    let model_view = lookat(eye, center, Vector3::new(0., 1., 0.));
+    let light_dir = Vector3::new(0., -1., -3.).normalize();
     let mut projection = Matrix4::<f32>::identity();
     let (x, y, w, h) = (WIDTH as f32 / 8., HEIGHT as f32 / 8., WIDTH as f32 * 3. / 4., HEIGHT as f32 * 3. / 4.);
     let viewport = viewport(x, y, w, h);
 
-    projection[2][3] = -1. / camera.z;
+    projection[2][3] = -1. / normal(eye - center);
 
     for mesh in scene.mesh_iter() {
         for face in mesh.face_iter() {
             let mut screen_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
             let mut world_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
+            let mut intensity: [f32; 3] = [0.; 3];
 
             for j in 0..3 {
                 let v: Vector3<f32> = match mesh.get_vertex(face[j]) {
                     Some(x) => x.into(),
-                    None => Vector3::<f32>::new(0., 0., 0.)
+                    None => Vector3::new(0., 0., 0.)
                 };
 
-                //let (p1, p2) = ((v.x + 1.) * WIDTH as f32 / 2., (v.y + 1.) * HEIGHT as f32 / 2.);
-                // m2v(ViewPort*Projection*ModelView*Matrix(v));
-                let m = viewport * projection * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
-                let result_vector = Vector3::<f32>::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
+                let mesh_normal: Vector3<f32> = match mesh.get_normal(face[j]) {
+                    Some(x) => x.into(),
+                    None => Vector3::new(0., 0., 0.)
+                };
+
+                let m = viewport * projection * model_view * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
+                let result_vector = Vector3::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
 
                 screen_coords[j as usize] = result_vector;
-
                 world_coords[j as usize] = v;
+                intensity[j as usize] = mesh_normal.dot(light_dir);
             }
 
-            let n = (world_coords[2] - world_coords[0]).cross(world_coords[1] - world_coords[0]).normalize();
-            let intensity = n.dot(light_dir);
-
-            if intensity > 0.0 { // back-face culling
-                renderer.triangle(
-                    screen_coords[0],
-                    screen_coords[1],
-                    screen_coords[2],
-                    Color::RGB(
-                        (intensity * 255.) as u8,
-                        (intensity * 255.) as u8,
-                        (intensity * 255.) as u8
-                    )
-                );
-            }
+            renderer.triangle(
+                screen_coords[0],
+                screen_coords[1],
+                screen_coords[2],
+                Color::RGB(
+                    (intensity[0] * 255.) as u8,
+                    (intensity[1] * 255.) as u8,
+                    (intensity[2] * 255.) as u8
+                )
+            );
         }
     }
 
