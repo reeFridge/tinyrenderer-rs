@@ -3,6 +3,7 @@ extern crate assimp;
 extern crate cgmath;
 
 use assimp::Importer;
+use assimp::Scene;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -196,6 +197,112 @@ impl<'a> TinyRenderer for Renderer<'a> {
     }
 }
 
+fn viewport(x: f32, y: f32, w: f32, h: f32) -> Matrix4<f32> {
+    let mut viewport = Matrix4::<f32>::identity();
+    viewport[3][0] = x + w / 2.;
+    viewport[3][1] = y + h / 2.;
+    viewport[3][2] = 255. / 2.; //depth
+
+    viewport[0][0] = w / 2.;
+    viewport[1][1] = h / 2.;
+    viewport[2][2] = 255. / 2.;
+    return viewport;
+}
+
+fn lookat(eye: Vector3<f32>, center: Vector3<f32>, up: Vector3<f32>) -> Matrix4<f32> {
+    let z = (eye - center).normalize();
+    let x = up.cross(z).normalize();
+    let y = z.cross(x).normalize();
+    let mut res = Matrix4::<f32>::identity();
+
+    for i in 0..3 {
+        res[i][0] = x[i];
+        res[i][1] = y[i];
+        res[i][2] = z[i];
+        res[3][i] = -center[i];
+    }
+
+    return res;
+}
+
+fn normal(v: Vector3<f32>) -> f32 {
+    (v.x * v.x + v.y * v.y + v.z * v.z).sqrt()
+}
+
+fn clear_z_buffer() {
+    unsafe {
+        Z_BUFFER = [-1.; 800 * 800];
+    }
+}
+
+fn calc_eye_location(distance: f32, longitude: f32, latitude: f32) -> Vector3<f32> {
+    let m_pi = std::f32::consts::PI;
+    let l = distance * (m_pi * longitude / 180.0).cos();
+
+    Vector3::new(
+        l * -(m_pi * latitude / 180.0).sin(),
+        distance * (m_pi * longitude / 180.0).sin(),
+        l * (m_pi * latitude / 180.0).cos()
+    )
+}
+
+fn render(renderer: &mut Renderer, scene: &Scene, dist: f32, long: f32, lat: f32) {
+    renderer.set_draw_color(Color::RGB(0, 0, 0));
+    renderer.clear();
+    clear_z_buffer();
+
+    let eye = calc_eye_location(dist, long, lat);
+    let center = Vector3::new(0., 0., 0.);
+
+    let model_view = lookat(eye, center, Vector3::new(0., 1., 0.));
+    let light_dir = Vector3::new(0., -1., -3.).normalize();
+    let mut projection = Matrix4::<f32>::identity();
+    let (x, y, w, h) = (WIDTH as f32 / 8., HEIGHT as f32 / 8., WIDTH as f32 * 3. / 4., HEIGHT as f32 * 3. / 4.);
+    let viewport = viewport(x, y, w, h);
+
+    projection[2][3] = -1. / normal(eye - center);
+
+    for mesh in scene.mesh_iter() {
+        for face in mesh.face_iter() {
+            let mut screen_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
+            let mut world_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
+            let mut intensity: [f32; 3] = [0.; 3];
+
+            for j in 0..3 {
+                let v: Vector3<f32> = match mesh.get_vertex(face[j]) {
+                    Some(x) => x.into(),
+                    None => Vector3::new(0., 0., 0.)
+                };
+
+                let mesh_normal: Vector3<f32> = match mesh.get_normal(face[j]) {
+                    Some(x) => x.into(),
+                    None => Vector3::new(0., 0., 0.)
+                };
+
+                let m = viewport * projection * model_view * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
+                let result_vector = Vector3::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
+
+                screen_coords[j as usize] = result_vector;
+                world_coords[j as usize] = v;
+                intensity[j as usize] = mesh_normal.dot(light_dir);
+            }
+
+            renderer.triangle(
+                screen_coords[0],
+                screen_coords[1],
+                screen_coords[2],
+                Color::RGB(
+                    (intensity[0] * 255.) as u8,
+                    (intensity[1] * 255.) as u8,
+                    (intensity[2] * 255.) as u8
+                )
+            );
+        }
+    }
+
+    renderer.present();
+}
+
 fn main() {
     let importer = Importer::new();
     let scene = importer.read_file("resources/model.obj").unwrap();
@@ -211,66 +318,12 @@ fn main() {
 
     let mut renderer = window.renderer().build().unwrap();
 
-    renderer.set_draw_color(Color::RGB(0, 0, 0));
-    renderer.clear();
-
-    let camera = Vector3::new(0., 0., 3.);
-    let light_dir = Vector3::new(0., 0., -1.);
-    let mut projection = Matrix4::<f32>::identity();
-    let mut viewport = Matrix4::<f32>::identity();
-    let (x, y, w, h) = (WIDTH as f32 / 8., HEIGHT as f32 / 8., WIDTH as f32 * 3. / 4., HEIGHT as f32 * 3. / 4.);
-    viewport[3][0] = x + w / 2.;
-    viewport[3][1] = y + h / 2.;
-    viewport[3][2] = 255. / 2.; //depth
-
-    viewport[0][0] = w / 2.;
-    viewport[1][1] = h / 2.;
-    viewport[2][2] = 255. / 2.;
-
-    projection[2][3] = -1. / camera.z;
-
-    for mesh in scene.mesh_iter() {
-        for face in mesh.face_iter() {
-            let mut screen_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
-            let mut world_coords: [Vector3<f32>; 3] = [Vector3::zero(); 3];
-
-            for j in 0..3 {
-                let v: Vector3<f32> = match mesh.get_vertex(face[j]) {
-                    Some(x) => x.into(),
-                    None => Vector3::<f32>::new(0., 0., 0.)
-                };
-
-                //let (p1, p2) = ((v.x + 1.) * WIDTH as f32 / 2., (v.y + 1.) * HEIGHT as f32 / 2.);
-                // m2v(viewport * projection * v2m(v));
-                let m = viewport * projection * Vector4::<f32>::new(v.x, v.y, v.z, 1.);
-                let result_vector = Vector3::<f32>::new(m.x / m.w, HEIGHT as f32 - (m.y / m.w), m.z / m.w);
-
-                screen_coords[j as usize] = result_vector;
-
-                world_coords[j as usize] = v;
-            }
-
-            let n = (world_coords[2] - world_coords[0]).cross(world_coords[1] - world_coords[0]).normalize();
-            let intensity = n.dot(light_dir);
-
-            if intensity > 0.0 { // back-face culling
-                renderer.triangle(
-                    screen_coords[0],
-                    screen_coords[1],
-                    screen_coords[2],
-                    Color::RGB(
-                        (intensity * 255.) as u8,
-                        (intensity * 255.) as u8,
-                        (intensity * 255.) as u8
-                    )
-                );
-            }
-        }
-    }
-
-    renderer.present();
-
     let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let mut camera_longitude = 5.;
+    let mut camera_latitude = 10.;
+    let camera_distance = 10.;
+    let velocity = 10.;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -278,9 +331,22 @@ fn main() {
                 Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
+                Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
+                    camera_latitude -= 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
+                    camera_latitude += 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
+                    camera_longitude += 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
+                    camera_longitude -= 0.1 * velocity;
+                },
                 _ => {}
             }
         }
-        //code here
+
+        render(&mut renderer, &scene, camera_distance, camera_longitude, camera_latitude);
     }
 }
