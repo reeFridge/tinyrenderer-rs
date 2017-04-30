@@ -3,6 +3,7 @@ extern crate assimp;
 extern crate cgmath;
 
 use assimp::Importer;
+use assimp::Scene;
 use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -228,30 +229,29 @@ fn normal(v: Vector3<f32>) -> f32 {
     (v.x * v.x + v.y * v.y + v.z * v.z).sqrt()
 }
 
-fn main() {
-    let importer = Importer::new();
-    let scene = importer.read_file("resources/model.obj").unwrap();
+fn clear_z_buffer() {
+    unsafe {
+        Z_BUFFER = [-1.; 800 * 800];
+    }
+}
 
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
+fn calc_eye_location(distance: f32, longitude: f32, latitude: f32) -> Vector3<f32> {
+    let m_pi = std::f32::consts::PI;
+    let l = distance * (m_pi * longitude / 180.0).cos();
 
-    let window = video_subsystem.window("tinyrenderer-rs", WIDTH, HEIGHT)
-        .position_centered()
-        .opengl()
-        .build()
-        .unwrap();
+    Vector3::new(
+        l * -(m_pi * latitude / 180.0).sin(),
+        distance * (m_pi * longitude / 180.0).sin(),
+        l * (m_pi * latitude / 180.0).cos()
+    )
+}
 
-    let mut renderer = window.renderer().build().unwrap();
-
+fn render(renderer: &mut Renderer, scene: &Scene, dist: f32, long: f32, lat: f32) {
     renderer.set_draw_color(Color::RGB(0, 0, 0));
     renderer.clear();
-    // front: ( 0,  0,  3)
-    // back:  ( 0,  0, -3)
-    // left:  (-3,  0,  0)
-    // right: ( 3,  0,  0)
-    // top:   ( 0,  3,  0.1) ?
-    // down:  ( 0, -3,  0.1) ?
-    let eye = Vector3::new(1., 1., 3.);
+    clear_z_buffer();
+
+    let eye = calc_eye_location(dist, long, lat);
     let center = Vector3::new(0., 0., 0.);
 
     let model_view = lookat(eye, center, Vector3::new(0., 1., 0.));
@@ -301,8 +301,29 @@ fn main() {
     }
 
     renderer.present();
+}
+
+fn main() {
+    let importer = Importer::new();
+    let scene = importer.read_file("resources/model.obj").unwrap();
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem.window("tinyrenderer-rs", WIDTH, HEIGHT)
+        .position_centered()
+        .opengl()
+        .build()
+        .unwrap();
+
+    let mut renderer = window.renderer().build().unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let mut camera_longitude = 5.;
+    let mut camera_latitude = 10.;
+    let camera_distance = 10.;
+    let velocity = 10.;
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -310,9 +331,22 @@ fn main() {
                 Event::Quit {..} | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'running
                 },
+                Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
+                    camera_latitude -= 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
+                    camera_latitude += 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
+                    camera_longitude += 0.1 * velocity;
+                },
+                Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
+                    camera_longitude -= 0.1 * velocity;
+                },
                 _ => {}
             }
         }
-        //code here
+
+        render(&mut renderer, &scene, camera_distance, camera_longitude, camera_latitude);
     }
 }
